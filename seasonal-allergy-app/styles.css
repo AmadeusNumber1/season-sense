@@ -69,7 +69,11 @@ button {
   color: white;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
+
+button:hover { transform: translateY(-1px); }
+button:active { transform: translateY(0); opacity: 0.9; }
 
 .btn-primary {
   background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -124,11 +128,13 @@ button {
 .high { background: rgba(249, 115, 22, 0.25); color: #fdba74; }
 .very-high { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
 
-.forecast-wrap {
+.forecast-wrap,
+.source-wrap {
   margin-top: 1rem;
 }
 
-.forecast-wrap h2 {
+.forecast-wrap h2,
+.source-wrap h2 {
   margin: 0 0 0.85rem;
   font-size: 1rem;
   color: #cbd5e1;
@@ -149,6 +155,24 @@ button {
 
 .row span:first-child { color: #e2e8f0; }
 .row span:not(:first-child) { color: #93c5fd; }
+
+.sources {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.sources a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.sources a:hover { text-decoration: underline; }
+
+.sources p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
 
 @media (max-width: 680px) {
   .row {

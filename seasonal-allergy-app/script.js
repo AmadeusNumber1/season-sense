@@ -13,6 +13,7 @@ const cityInput = document.getElementById("cityInput");
 const statusEl = document.getElementById("status");
 const summaryEl = document.getElementById("summary");
 const forecastEl = document.getElementById("forecast");
+const sourcesEl = document.getElementById("sources");
 
 function levelClass(value) {
   if (value <= 20) return ["Low", "low"];
@@ -33,6 +34,40 @@ function formatDate(isoDate) {
   });
 }
 
+function startOfDayIndex(times, date) {
+  const target = date.toISOString().slice(0, 10);
+  return times.findIndex((t) => t.startsWith(target));
+}
+
+function aggregateDay(hours) {
+  const valid = hours.filter((n) => typeof n === "number" && !Number.isNaN(n));
+  if (!valid.length) return 0;
+  return Math.max(...valid);
+}
+
+function buildDailyFromHourly(hourly) {
+  const times = hourly.time;
+  const daily = [];
+
+  for (let d = 0; d < 7; d++) {
+    const day = new Date();
+    day.setDate(day.getDate() + d);
+    const start = startOfDayIndex(times, day);
+    if (start === -1) continue;
+
+    const end = Math.min(start + 24, times.length);
+    const bucket = { date: day.toISOString().slice(0, 10), metrics: {} };
+
+    for (const { key } of POLLEN_KEYS) {
+      bucket.metrics[key] = aggregateDay(hourly[key].slice(start, end));
+    }
+
+    daily.push(bucket);
+  }
+
+  return daily;
+}
+
 async function fetchPollen(lat, lon, label = "your area") {
   setStatus(`Fetching allergy data for ${label}…`);
 
@@ -40,7 +75,9 @@ async function fetchPollen(lat, lon, label = "your area") {
     latitude: lat,
     longitude: lon,
     timezone: "auto",
-    daily: POLLEN_KEYS.map((p) => p.key).join(","),
+    forecast_days: "7",
+    domains: "cams_europe",
+    hourly: POLLEN_KEYS.map((p) => p.key).join(","),
   });
 
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
@@ -51,18 +88,34 @@ async function fetchPollen(lat, lon, label = "your area") {
   render(data, label);
 }
 
+function renderSources() {
+  sourcesEl.innerHTML = `
+    <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a>
+    <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding API</a>
+    <p>Data coverage for pollen is strongest in Europe (CAMS Europe model).</p>
+  `;
+}
+
 function render(data, label) {
-  const { daily } = data;
-  if (!daily?.time?.length) {
-    setStatus(`No pollen data returned for ${label}.`);
+  if (!data?.hourly?.time?.length) {
+    setStatus(`No pollen data returned for ${label}. Try another nearby city.`);
+    summaryEl.innerHTML = "";
+    forecastEl.innerHTML = "";
     return;
   }
 
-  const todayIdx = 0;
-  const topThree = [...POLLEN_KEYS]
+  const daily = buildDailyFromHourly(data.hourly);
+  if (!daily.length) {
+    setStatus(`No usable daily allergy data for ${label}.`);
+    return;
+  }
+
+  const today = daily[0];
+
+  const topThree = POLLEN_KEYS
     .map((p) => ({
       label: p.label,
-      value: Number(daily[p.key]?.[todayIdx] ?? 0),
+      value: Number(today.metrics[p.key] ?? 0),
     }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
@@ -78,22 +131,23 @@ function render(data, label) {
     })
     .join("");
 
-  const maxDays = Math.min(7, daily.time.length);
-  forecastEl.innerHTML = Array.from({ length: maxDays }, (_, i) => {
-    const day = formatDate(daily.time[i]);
-    const grass = Number(daily.grass_pollen?.[i] ?? 0).toFixed(1);
-    const birch = Number(daily.birch_pollen?.[i] ?? 0).toFixed(1);
-    const ragweed = Number(daily.ragweed_pollen?.[i] ?? 0).toFixed(1);
-
-    return `<div class="row">
+  forecastEl.innerHTML = daily
+    .map((d) => {
+      const day = formatDate(d.date);
+      const grass = Number(d.metrics.grass_pollen ?? 0).toFixed(1);
+      const birch = Number(d.metrics.birch_pollen ?? 0).toFixed(1);
+      const ragweed = Number(d.metrics.ragweed_pollen ?? 0).toFixed(1);
+      return `<div class="row">
       <span>${day}</span>
       <span>Grass: ${grass}</span>
       <span>Birch: ${birch}</span>
       <span>Ragweed: ${ragweed}</span>
     </div>`;
-  }).join("");
+    })
+    .join("");
 
-  setStatus(`Showing allergy forecast for ${label}.`);
+  setStatus(`Showing allergy forecast for ${label}. Updated just now.`);
+  renderSources();
 }
 
 async function searchCity() {
@@ -142,3 +196,4 @@ cityInput.addEventListener("keydown", (e) => {
 });
 
 setStatus("Tap 'Use my location' to get started.");
+renderSources();
