@@ -30,7 +30,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./weatherly
+          path: ./seasonal-allergy-app
 
       - name: Deploy to GitHub Pages
         id: deployment
