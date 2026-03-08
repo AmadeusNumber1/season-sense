@@ -16,8 +16,13 @@
   <body>
     <main class="app-shell">
       <header class="header">
-        <h1>SeasonSense</h1>
-        <p>Live seasonal allergy levels for where you are.</p>
+        <div class="brand">
+          <img src="./logo.svg" alt="SeasonSense logo" class="logo" />
+          <div>
+            <h1>SeasonSense</h1>
+            <p>Simple seasonal allergy insight for where you are.</p>
+          </div>
+        </div>
       </header>
 
       <section class="controls glass">
@@ -29,9 +34,15 @@
       </section>
 
       <section id="status" class="status"></section>
+      <section id="modeBadge" class="mode-badge" hidden></section>
       <section id="locationBrief" class="location-brief" hidden></section>
 
       <section id="summary" class="summary-grid"></section>
+
+      <section id="airExplain" class="glass explain-wrap" hidden>
+        <h2>What’s in the air?</h2>
+        <p id="airExplainText"></p>
+      </section>
 
       <section id="adviceWrap" class="glass advice-wrap" hidden>
         <h2>Risk advice</h2>
@@ -49,6 +60,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=5" defer></script>
+    <script src="./script.js?v=6" defer></script>
   </body>
 </html>

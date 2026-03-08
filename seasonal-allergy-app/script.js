@@ -11,8 +11,11 @@ const locateBtn = document.getElementById("locateBtn");
 const searchBtn = document.getElementById("searchBtn");
 const cityInput = document.getElementById("cityInput");
 const statusEl = document.getElementById("status");
+const modeBadgeEl = document.getElementById("modeBadge");
 const locationBriefEl = document.getElementById("locationBrief");
 const summaryEl = document.getElementById("summary");
+const airExplainEl = document.getElementById("airExplain");
+const airExplainTextEl = document.getElementById("airExplainText");
 const forecastEl = document.getElementById("forecast");
 const sourcesEl = document.getElementById("sources");
 const adviceWrapEl = document.getElementById("adviceWrap");
@@ -27,6 +30,31 @@ function levelClass(value) {
 
 function setStatus(msg) {
   statusEl.textContent = msg;
+}
+
+function iconForLabel(label) {
+  const map = {
+    Grass: "🌾",
+    Alder: "🌳",
+    Birch: "🌿",
+    Ragweed: "🍂",
+    Mugwort: "🌱",
+    Olive: "🫒",
+    "Dust (PM10)": "🌫️",
+    UV: "☀️",
+    Wind: "💨",
+  };
+  return map[label] || "•";
+}
+
+function renderModeBadge(text) {
+  modeBadgeEl.textContent = text;
+  modeBadgeEl.hidden = false;
+}
+
+function renderAirExplain(text) {
+  airExplainTextEl.textContent = text;
+  airExplainEl.hidden = false;
 }
 
 function formatDate(isoDate) {
@@ -277,7 +305,7 @@ function renderPollen(data, label, usedPoint) {
   summaryEl.innerHTML = topThree
     .map((p) => {
       const [text, cls] = levelClass(p.value);
-      return `<article class="pollen-card"><h3>${p.label}</h3><div class="value">${p.value.toFixed(
+      return `<article class="pollen-card"><h3><span>${iconForLabel(p.label)}</span>${p.label}</h3><div class="value">${p.value.toFixed(
         1
       )}</div><span class="badge ${cls}">${text}</span></article>`;
     })
@@ -294,6 +322,10 @@ function renderPollen(data, label, usedPoint) {
     .join("");
 
   renderAdvice(Math.max(...topThree.map((p) => p.value)), false);
+  renderModeBadge("🧬 Pollen Mode");
+  renderAirExplain(
+    `Main triggers today: ${topThree[0].label}, ${topThree[1].label}, and ${topThree[2].label}. If you react to plant pollen, these are the strongest allergens in your local air right now.`
+  );
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: data.timezone, elevation: data.elevation });
   setStatus(`Showing pollen forecast for ${label}.`);
   renderSources("Primary source: pollen model.");
@@ -321,7 +353,7 @@ function renderProxy(air, weather, label, usedPoint) {
   summaryEl.innerHTML = cards
     .map((p) => {
       const [text, cls] = levelClass(p.value);
-      return `<article class="pollen-card"><h3>${p.label}</h3><div class="value">${Number(p.value).toFixed(
+      return `<article class="pollen-card"><h3><span>${iconForLabel(p.label)}</span>${p.label}</h3><div class="value">${Number(p.value).toFixed(
         1
       )}</div><span class="badge ${cls}">${text}</span></article>`;
     })
@@ -338,6 +370,10 @@ function renderProxy(air, weather, label, usedPoint) {
     .join("");
 
   renderAdvice(Math.max(...cards.map((c) => c.value)), true);
+  renderModeBadge("🌍 Global Proxy Mode");
+  renderAirExplain(
+    `No direct pollen model here, so risk is estimated from Dust (PM10), UV, and Wind. Higher values can worsen allergy symptoms, especially for sensitive users.`
+  );
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: air.timezone, elevation: air.elevation });
   setStatus(`Pollen model unavailable for ${label}. Showing environmental allergy risk proxy.`);
   renderSources("Proxy mode: PM10 + UV + wind used where pollen model is unavailable.");
