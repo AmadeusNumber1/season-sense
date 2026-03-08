@@ -18,8 +18,14 @@ const airExplainEl = document.getElementById("airExplain");
 const airExplainTextEl = document.getElementById("airExplainText");
 const forecastEl = document.getElementById("forecast");
 const sourcesEl = document.getElementById("sources");
+const driversWrapEl = document.getElementById("driversWrap");
+const driversTextEl = document.getElementById("driversText");
+const symptomsWrapEl = document.getElementById("symptomsWrap");
+const symptomsTextEl = document.getElementById("symptomsText");
 const adviceWrapEl = document.getElementById("adviceWrap");
 const adviceTextEl = document.getElementById("adviceText");
+const coldCheckWrapEl = document.getElementById("coldCheckWrap");
+const coldCheckTextEl = document.getElementById("coldCheckText");
 
 function levelClass(value) {
   if (value <= 20) return ["Low", "low"];
@@ -55,6 +61,25 @@ function renderModeBadge(text) {
 function renderAirExplain(text) {
   airExplainTextEl.textContent = text;
   airExplainEl.hidden = false;
+}
+
+function renderDrivers(text) {
+  driversTextEl.textContent = text;
+  driversWrapEl.hidden = false;
+}
+
+function renderSymptoms(text) {
+  symptomsTextEl.textContent = text;
+  symptomsWrapEl.hidden = false;
+}
+
+function renderColdVsAllergy(text) {
+  coldCheckTextEl.textContent = text;
+  coldCheckWrapEl.hidden = false;
+}
+
+function buildColdVsAllergyText() {
+  return "Allergies are more likely with itchy/watery eyes, repeated sneezing, and clear mucus without fever. A cold is more likely with fever, sore throat, body aches, and thicker mucus. If symptoms persist or worsen, check with a clinician.";
 }
 
 function formatDate(isoDate) {
@@ -114,7 +139,7 @@ async function fetchByPoint(lat, lon) {
     forecast_days: "7",
     domains: "auto",
     cell_selection: "nearest",
-    hourly: [...POLLEN_KEYS.map((p) => p.key), "pm10"].join(","),
+    hourly: [...POLLEN_KEYS.map((p) => p.key), "pm10", "wind_speed_10m", "relative_humidity_2m"].join(","),
   });
 
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
@@ -326,6 +351,15 @@ function renderPollen(data, label, usedPoint) {
   renderAirExplain(
     `Main triggers today: ${topThree[0].label}, ${topThree[1].label}, and ${topThree[2].label}. If you react to plant pollen, these are the strongest allergens in your local air right now.`
   );
+  const windToday = data.hourly?.wind_speed_10m?.find((v) => typeof v === "number");
+  const humidityToday = data.hourly?.relative_humidity_2m?.find((v) => typeof v === "number");
+  renderDrivers(
+    `Blooming pressure is led by ${topThree[0].label}. ${typeof windToday === "number" ? `Wind is around ${windToday.toFixed(1)} km/h, which can spread pollen farther.` : "Wind may still carry pollen between neighborhoods."} ${typeof humidityToday === "number" ? `Humidity is near ${humidityToday.toFixed(0)}%, which can change how heavy air feels.` : "Humidity can also change how symptoms feel."}`
+  );
+  renderSymptoms(
+    `Most likely today: sneezing, itchy/watery eyes, runny or blocked nose, and throat tickle—especially if you’re sensitive to ${topThree[0].label.toLowerCase()} pollen.`
+  );
+  renderColdVsAllergy(buildColdVsAllergyText());
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: data.timezone, elevation: data.elevation });
   setStatus(`Showing pollen forecast for ${label}.`);
   renderSources("Primary source: pollen model.");
@@ -374,6 +408,14 @@ function renderProxy(air, weather, label, usedPoint) {
   renderAirExplain(
     `No direct pollen model here, so risk is estimated from Dust (PM10), UV, and Wind. Higher values can worsen allergy symptoms, especially for sensitive users.`
   );
+  const t = rows[0] || {};
+  renderDrivers(
+    `Today’s air pattern: ${t.pm10 != null ? `dust around ${Number(t.pm10).toFixed(1)} µg/m³` : "dust data limited"}, ${t.wind != null ? `wind near ${Number(t.wind).toFixed(1)} km/h` : "wind variable"}, and ${t.uv != null ? `UV near ${Number(t.uv).toFixed(1)}` : "UV moderate"}. These can amplify irritation.`
+  );
+  renderSymptoms(
+    "Most likely today: dry/itchy eyes, sneezing, throat irritation, and nasal congestion—especially outdoors or in windy periods."
+  );
+  renderColdVsAllergy(buildColdVsAllergyText());
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: air.timezone, elevation: air.elevation });
   setStatus(`Pollen model unavailable for ${label}. Showing environmental allergy risk proxy.`);
   renderSources("Proxy mode: PM10 + UV + wind used where pollen model is unavailable.");
