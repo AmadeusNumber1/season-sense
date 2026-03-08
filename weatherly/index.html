@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weatherly</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Weatherly</h1>
+      <p class="sub">Simple weather with Celsius + Fahrenheit together.</p>
+
+      <section class="panel">
+        <button id="locBtn">Use current location</button>
+        <div class="search">
+          <input id="cityInput" placeholder="Search city" />
+          <button id="searchBtn" class="ghost">Search</button>
+        </div>
+      </section>
+
+      <p id="status" class="status">Loading your location…</p>
+      <p id="place" class="place" hidden></p>
+
+      <section id="weatherCard" class="card" hidden>
+        <div class="temp" id="tempPair">--°C / --°F</div>
+        <div class="meta" id="metaLine"></div>
+      </section>
+    </main>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>
