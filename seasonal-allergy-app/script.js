@@ -156,18 +156,27 @@ async function fetchByPoint(lat, lon) {
   return { ok: true, payload, hasPollen: hasAnyNumericPollen(payload.hourly) };
 }
 
+function buildSearchPoints(lat, lon) {
+  const distances = [0, 0.2, 0.5, 1, 2, 3, 5];
+  const points = [[lat, lon]];
+
+  for (const d of distances) {
+    if (d === 0) continue;
+    points.push([lat + d, lon]);
+    points.push([lat - d, lon]);
+    points.push([lat, lon + d]);
+    points.push([lat, lon - d]);
+    points.push([lat + d, lon + d]);
+    points.push([lat + d, lon - d]);
+    points.push([lat - d, lon + d]);
+    points.push([lat - d, lon - d]);
+  }
+
+  return points;
+}
+
 async function tryNearbyPoints(lat, lon) {
-  const points = [
-    [lat, lon],
-    [lat + 0.2, lon],
-    [lat - 0.2, lon],
-    [lat, lon + 0.2],
-    [lat, lon - 0.2],
-    [lat + 0.5, lon],
-    [lat - 0.5, lon],
-    [lat, lon + 0.5],
-    [lat, lon - 0.5],
-  ];
+  const points = buildSearchPoints(lat, lon);
 
   let lastReason = "Could not load pollen data.";
   let fallbackNoPollen = null;
@@ -239,14 +248,17 @@ async function fetchPollen(lat, lon, label = "your area") {
   let nearby = await tryNearbyPoints(lat, lon);
   let finalLabel = label;
 
-  if (!nearby.ok) {
-    const city = await resolveNearestCity(lat, lon);
-    if (city) {
-      const cityTry = await tryNearbyPoints(city.lat, city.lon);
-      if (cityTry.ok) {
-        nearby = cityTry;
-        finalLabel = city.name;
-      }
+  const city = await resolveNearestCity(lat, lon);
+
+  // If first result is only proxy, still attempt to force real pollen mode via nearest city search.
+  if (city && (!nearby.ok || nearby.mode !== "pollen")) {
+    const cityTry = await tryNearbyPoints(city.lat, city.lon);
+    if (cityTry.ok && cityTry.mode === "pollen") {
+      nearby = cityTry;
+      finalLabel = `${city.name} (nearest pollen zone)`;
+    } else if (!nearby.ok && cityTry.ok) {
+      nearby = cityTry;
+      finalLabel = city.name;
     }
   }
 
@@ -320,17 +332,25 @@ function renderPollen(data, label, usedPoint) {
   if (!daily.length) throw new Error("No usable daily allergy data.");
 
   const today = daily[0];
-  const topThree = POLLEN_KEYS.map((p) => ({
+  const allPollen = POLLEN_KEYS.map((p) => ({
     label: p.label,
     value: Number(today.metrics[p.key] ?? 0),
-  }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+  })).sort((a, b) => b.value - a.value);
 
-  summaryEl.innerHTML = topThree
+  const pollenIndex = allPollen.reduce((sum, p) => sum + p.value, 0);
+
+  summaryEl.innerHTML = [
+    {
+      label: "Total Pollen Index",
+      value: pollenIndex,
+      icon: "🧪",
+    },
+    ...allPollen,
+  ]
     .map((p) => {
       const [text, cls] = levelClass(p.value);
-      return `<article class="pollen-card"><h3><span>${iconForLabel(p.label)}</span>${p.label}</h3><div class="value">${p.value.toFixed(
+      const icon = p.icon || iconForLabel(p.label);
+      return `<article class="pollen-card"><h3><span>${icon}</span>${p.label}</h3><div class="value">${p.value.toFixed(
         1
       )}</div><span class="badge ${cls}">${text}</span></article>`;
     })
@@ -346,18 +366,18 @@ function renderPollen(data, label, usedPoint) {
     })
     .join("");
 
-  renderAdvice(Math.max(...topThree.map((p) => p.value)), false);
+  renderAdvice(Math.max(...allPollen.map((p) => p.value)), false);
   renderModeBadge("🧬 Pollen Mode");
   renderAirExplain(
-    `Main triggers today: ${topThree[0].label}, ${topThree[1].label}, and ${topThree[2].label}. If you react to plant pollen, these are the strongest allergens in your local air right now.`
+    `Main triggers today: ${allPollen[0].label}, ${allPollen[1].label}, ${allPollen[2].label}, and ${allPollen[3].label}. These are the strongest likely allergens in your local air right now.`
   );
   const windToday = data.hourly?.wind_speed_10m?.find((v) => typeof v === "number");
   const humidityToday = data.hourly?.relative_humidity_2m?.find((v) => typeof v === "number");
   renderDrivers(
-    `Blooming pressure is led by ${topThree[0].label}. ${typeof windToday === "number" ? `Wind is around ${windToday.toFixed(1)} km/h, which can spread pollen farther.` : "Wind may still carry pollen between neighborhoods."} ${typeof humidityToday === "number" ? `Humidity is near ${humidityToday.toFixed(0)}%, which can change how heavy air feels.` : "Humidity can also change how symptoms feel."}`
+    `Blooming pressure is led by ${allPollen[0].label}. ${typeof windToday === "number" ? `Wind is around ${windToday.toFixed(1)} km/h, which can spread pollen farther.` : "Wind may still carry pollen between neighborhoods."} ${typeof humidityToday === "number" ? `Humidity is near ${humidityToday.toFixed(0)}%, which can change how heavy air feels.` : "Humidity can also change how symptoms feel."}`
   );
   renderSymptoms(
-    `Most likely today: sneezing, itchy/watery eyes, runny or blocked nose, and throat tickle—especially if you’re sensitive to ${topThree[0].label.toLowerCase()} pollen.`
+    `Most likely today: sneezing, itchy/watery eyes, runny or blocked nose, and throat tickle—especially if you’re sensitive to ${allPollen[0].label.toLowerCase()} pollen.`
   );
   renderColdVsAllergy(buildColdVsAllergyText());
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: data.timezone, elevation: data.elevation });
