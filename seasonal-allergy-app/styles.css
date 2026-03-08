@@ -128,11 +128,13 @@ button:active { transform: translateY(0); opacity: 0.9; }
 .high { background: rgba(249, 115, 22, 0.25); color: #fdba74; }
 .very-high { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
 
+.advice-wrap,
 .forecast-wrap,
 .source-wrap {
   margin-top: 1rem;
 }
 
+.advice-wrap h2,
 .forecast-wrap h2,
 .source-wrap h2 {
   margin: 0 0 0.85rem;
@@ -155,6 +157,12 @@ button:active { transform: translateY(0); opacity: 0.9; }
 
 .row span:first-child { color: #e2e8f0; }
 .row span:not(:first-child) { color: #93c5fd; }
+
+.advice-wrap p {
+  margin: 0;
+  color: #e2e8f0;
+  line-height: 1.45;
+}
 
 .sources {
   display: grid;

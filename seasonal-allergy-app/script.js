@@ -14,6 +14,8 @@ const statusEl = document.getElementById("status");
 const summaryEl = document.getElementById("summary");
 const forecastEl = document.getElementById("forecast");
 const sourcesEl = document.getElementById("sources");
+const adviceWrapEl = document.getElementById("adviceWrap");
+const adviceTextEl = document.getElementById("adviceText");
 
 function levelClass(value) {
   if (value <= 20) return ["Low", "low"];
@@ -41,7 +43,7 @@ function startOfDayIndex(times, date) {
 
 function aggregateDay(hours) {
   const valid = hours.filter((n) => typeof n === "number" && !Number.isNaN(n));
-  if (!valid.length) return 0;
+  if (!valid.length) return null;
   return Math.max(...valid);
 }
 
@@ -76,24 +78,42 @@ async function fetchPollen(lat, lon, label = "your area") {
     longitude: lon,
     timezone: "auto",
     forecast_days: "7",
-    domains: "cams_europe",
+    domains: "auto",
     hourly: POLLEN_KEYS.map((p) => p.key).join(","),
   });
 
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Could not load pollen data.");
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload.reason || "Could not load pollen data.");
+  }
 
-  const data = await res.json();
-  render(data, label);
+  render(payload, label);
 }
 
 function renderSources() {
   sourcesEl.innerHTML = `
     <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a>
     <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding API</a>
-    <p>Data coverage for pollen is strongest in Europe (CAMS Europe model).</p>
+    <p>Coverage varies by region and season. If pollen model data is unavailable, values may be missing.</p>
   `;
+}
+
+function renderAdvice(maxValue) {
+  const [level] = levelClass(maxValue ?? 0);
+  let text = "Low risk today. Keep windows open as needed and monitor symptoms.";
+
+  if (level === "Moderate") {
+    text = "Moderate risk today. Consider antihistamines early, and reduce outdoor time during windy hours.";
+  } else if (level === "High") {
+    text = "High risk today. Keep windows closed, shower after being outside, and use a mask if symptoms flare.";
+  } else if (level === "Very High") {
+    text = "Very high risk today. Limit outdoor exposure, use your prescribed meds proactively, and run an indoor air filter if possible.";
+  }
+
+  adviceTextEl.textContent = text;
+  adviceWrapEl.hidden = false;
 }
 
 function render(data, label) {
@@ -101,12 +121,14 @@ function render(data, label) {
     setStatus(`No pollen data returned for ${label}. Try another nearby city.`);
     summaryEl.innerHTML = "";
     forecastEl.innerHTML = "";
+    adviceWrapEl.hidden = true;
     return;
   }
 
   const daily = buildDailyFromHourly(data.hourly);
   if (!daily.length) {
     setStatus(`No usable daily allergy data for ${label}.`);
+    adviceWrapEl.hidden = true;
     return;
   }
 
@@ -116,9 +138,19 @@ function render(data, label) {
     .map((p) => ({
       label: p.label,
       value: Number(today.metrics[p.key] ?? 0),
+      raw: today.metrics[p.key],
     }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
+
+  const hasAnyModelData = POLLEN_KEYS.some(({ key }) => typeof today.metrics[key] === "number");
+  if (!hasAnyModelData) {
+    setStatus(`Pollen model data is not available for ${label} right now. Try a nearby major city.`);
+    summaryEl.innerHTML = "";
+    forecastEl.innerHTML = "";
+    adviceWrapEl.hidden = true;
+    return;
+  }
 
   summaryEl.innerHTML = topThree
     .map((p) => {
@@ -134,9 +166,9 @@ function render(data, label) {
   forecastEl.innerHTML = daily
     .map((d) => {
       const day = formatDate(d.date);
-      const grass = Number(d.metrics.grass_pollen ?? 0).toFixed(1);
-      const birch = Number(d.metrics.birch_pollen ?? 0).toFixed(1);
-      const ragweed = Number(d.metrics.ragweed_pollen ?? 0).toFixed(1);
+      const grass = d.metrics.grass_pollen == null ? "—" : Number(d.metrics.grass_pollen).toFixed(1);
+      const birch = d.metrics.birch_pollen == null ? "—" : Number(d.metrics.birch_pollen).toFixed(1);
+      const ragweed = d.metrics.ragweed_pollen == null ? "—" : Number(d.metrics.ragweed_pollen).toFixed(1);
       return `<div class="row">
       <span>${day}</span>
       <span>Grass: ${grass}</span>
@@ -145,6 +177,9 @@ function render(data, label) {
     </div>`;
     })
     .join("");
+
+  const maxToday = Math.max(...topThree.map((p) => p.value));
+  renderAdvice(maxToday);
 
   setStatus(`Showing allergy forecast for ${label}. Updated just now.`);
   renderSources();
