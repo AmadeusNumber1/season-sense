@@ -85,9 +85,15 @@ button:active { transform: translateY(0); opacity: 0.9; }
 }
 
 .status {
-  margin: 1rem 0;
+  margin: 1rem 0 0.4rem;
   color: var(--muted);
   min-height: 1.2rem;
+}
+
+.location-brief {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+  margin-bottom: 0.9rem;
 }
 
 .summary-grid {

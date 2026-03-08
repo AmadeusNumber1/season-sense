@@ -11,6 +11,7 @@ const locateBtn = document.getElementById("locateBtn");
 const searchBtn = document.getElementById("searchBtn");
 const cityInput = document.getElementById("cityInput");
 const statusEl = document.getElementById("status");
+const locationBriefEl = document.getElementById("locationBrief");
 const summaryEl = document.getElementById("summary");
 const forecastEl = document.getElementById("forecast");
 const sourcesEl = document.getElementById("sources");
@@ -48,7 +49,7 @@ function aggregateDay(hours) {
 }
 
 function buildDailyFromHourly(hourly) {
-  const times = hourly.time;
+  const times = hourly.time || [];
   const daily = [];
 
   for (let d = 0; d < 7; d++) {
@@ -61,7 +62,8 @@ function buildDailyFromHourly(hourly) {
     const bucket = { date: day.toISOString().slice(0, 10), metrics: {} };
 
     for (const { key } of POLLEN_KEYS) {
-      bucket.metrics[key] = aggregateDay(hourly[key].slice(start, end));
+      const arr = Array.isArray(hourly[key]) ? hourly[key] : [];
+      bucket.metrics[key] = aggregateDay(arr.slice(start, end));
     }
 
     daily.push(bucket);
@@ -70,58 +72,120 @@ function buildDailyFromHourly(hourly) {
   return daily;
 }
 
+function hasAnyNumericPollen(hourly) {
+  return POLLEN_KEYS.some(({ key }) =>
+    Array.isArray(hourly[key]) && hourly[key].some((v) => typeof v === "number")
+  );
+}
+
 async function fetchPollen(lat, lon, label = "your area") {
   setStatus(`Fetching allergy data for ${label}…`);
 
-  const params = new URLSearchParams({
-    latitude: lat,
-    longitude: lon,
-    timezone: "auto",
-    forecast_days: "7",
-    domains: "auto",
-    hourly: POLLEN_KEYS.map((p) => p.key).join(","),
-  });
+  const points = [
+    [lat, lon],
+    [lat + 0.2, lon],
+    [lat - 0.2, lon],
+    [lat, lon + 0.2],
+    [lat, lon - 0.2],
+  ];
 
-  const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
-  const res = await fetch(url);
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(payload.reason || "Could not load pollen data.");
+  let lastError = "Could not load pollen data.";
+
+  for (const [plat, plon] of points) {
+    const params = new URLSearchParams({
+      latitude: String(plat),
+      longitude: String(plon),
+      timezone: "auto",
+      forecast_days: "7",
+      domains: "auto",
+      cell_selection: "nearest",
+      hourly: POLLEN_KEYS.map((p) => p.key).join(","),
+    });
+
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
+
+    try {
+      const res = await fetch(url);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        lastError = payload.reason || lastError;
+        continue;
+      }
+
+      if (!payload?.hourly?.time?.length) {
+        lastError = "No hourly pollen model data returned.";
+        continue;
+      }
+
+      if (!hasAnyNumericPollen(payload.hourly)) {
+        lastError = "Pollen model data missing for this area right now.";
+        continue;
+      }
+
+      render(payload, label, { lat: plat, lon: plon });
+      return;
+    } catch {
+      lastError = "Network error while loading pollen data.";
+    }
   }
 
-  render(payload, label);
+  throw new Error(lastError);
+}
+
+async function renderLocationBrief(label, usedLat, usedLon, meta = {}) {
+  const base = [label, meta.timezone, meta.elevation != null ? `${Math.round(meta.elevation)}m elevation` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  try {
+    const reverseUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(
+      usedLat
+    )}&longitude=${encodeURIComponent(usedLon)}&localityLanguage=en`;
+    const r = await fetch(reverseUrl);
+    const d = await r.json();
+    const place = [d.city || d.locality, d.principalSubdivision, d.countryName].filter(Boolean).join(", ");
+    const text = `${place}. Seasonal pollen snapshot from nearest forecast grid point.`;
+    const finalText = (text || base || "Location detected.").slice(0, 200);
+    locationBriefEl.textContent = finalText;
+    locationBriefEl.hidden = false;
+  } catch {
+    locationBriefEl.textContent = (base || "Location detected.").slice(0, 200);
+    locationBriefEl.hidden = false;
+  }
 }
 
 function renderSources() {
   sourcesEl.innerHTML = `
-    <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a>
-    <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding API</a>
-    <p>Coverage varies by region and season. If pollen model data is unavailable, values may be missing.</p>
+    <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API (pollen forecast model)</a>
+    <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding API (city search)</a>
+    <a href="https://www.bigdatacloud.com/geocoding-apis/free-reverse-geocode-to-city-api" target="_blank" rel="noreferrer">BigDataCloud Reverse Geocoding (location description)</a>
+    <p>Coverage can vary by region/season; values shown come from the nearest available model grid.</p>
   `;
 }
 
 function renderAdvice(maxValue) {
   const [level] = levelClass(maxValue ?? 0);
-  let text = "Low risk today. Keep windows open as needed and monitor symptoms.";
+  let text = "Low risk today. Keep your routine and monitor symptoms.";
 
   if (level === "Moderate") {
-    text = "Moderate risk today. Consider antihistamines early, and reduce outdoor time during windy hours.";
+    text = "Moderate risk today. Consider antihistamines early and avoid peak windy hours outside.";
   } else if (level === "High") {
-    text = "High risk today. Keep windows closed, shower after being outside, and use a mask if symptoms flare.";
+    text = "High risk today. Keep windows closed, shower after outdoor time, and use a mask if needed.";
   } else if (level === "Very High") {
-    text = "Very high risk today. Limit outdoor exposure, use your prescribed meds proactively, and run an indoor air filter if possible.";
+    text = "Very high risk today. Limit outdoor exposure and use your allergy meds proactively.";
   }
 
   adviceTextEl.textContent = text;
   adviceWrapEl.hidden = false;
 }
 
-function render(data, label) {
+function render(data, label, usedPoint) {
   if (!data?.hourly?.time?.length) {
     setStatus(`No pollen data returned for ${label}. Try another nearby city.`);
     summaryEl.innerHTML = "";
     forecastEl.innerHTML = "";
     adviceWrapEl.hidden = true;
+    locationBriefEl.hidden = true;
     return;
   }
 
@@ -129,17 +193,17 @@ function render(data, label) {
   if (!daily.length) {
     setStatus(`No usable daily allergy data for ${label}.`);
     adviceWrapEl.hidden = true;
+    locationBriefEl.hidden = true;
     return;
   }
 
   const today = daily[0];
 
-  const topThree = POLLEN_KEYS
-    .map((p) => ({
-      label: p.label,
-      value: Number(today.metrics[p.key] ?? 0),
-      raw: today.metrics[p.key],
-    }))
+  const topThree = POLLEN_KEYS.map((p) => ({
+    label: p.label,
+    value: Number(today.metrics[p.key] ?? 0),
+    raw: today.metrics[p.key],
+  }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
 
@@ -149,6 +213,7 @@ function render(data, label) {
     summaryEl.innerHTML = "";
     forecastEl.innerHTML = "";
     adviceWrapEl.hidden = true;
+    locationBriefEl.hidden = true;
     return;
   }
 
@@ -180,6 +245,11 @@ function render(data, label) {
 
   const maxToday = Math.max(...topThree.map((p) => p.value));
   renderAdvice(maxToday);
+
+  renderLocationBrief(label, usedPoint?.lat ?? data.latitude, usedPoint?.lon ?? data.longitude, {
+    timezone: data.timezone,
+    elevation: data.elevation,
+  });
 
   setStatus(`Showing allergy forecast for ${label}. Updated just now.`);
   renderSources();
