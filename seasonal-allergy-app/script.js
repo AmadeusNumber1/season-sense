@@ -157,7 +157,7 @@ async function fetchByPoint(lat, lon) {
 }
 
 function buildSearchPoints(lat, lon) {
-  const distances = [0, 0.2, 0.5, 1, 2, 3, 5];
+  const distances = [0, 0.2, 0.5, 1];
   const points = [[lat, lon]];
 
   for (const d of distances) {
@@ -166,10 +166,6 @@ function buildSearchPoints(lat, lon) {
     points.push([lat - d, lon]);
     points.push([lat, lon + d]);
     points.push([lat, lon - d]);
-    points.push([lat + d, lon + d]);
-    points.push([lat + d, lon - d]);
-    points.push([lat - d, lon + d]);
-    points.push([lat - d, lon - d]);
   }
 
   return points;
@@ -248,17 +244,18 @@ async function fetchPollen(lat, lon, label = "your area") {
   let nearby = await tryNearbyPoints(lat, lon);
   let finalLabel = label;
 
-  const city = await resolveNearestCity(lat, lon);
-
-  // If first result is only proxy, still attempt to force real pollen mode via nearest city search.
-  if (city && (!nearby.ok || nearby.mode !== "pollen")) {
-    const cityTry = await tryNearbyPoints(city.lat, city.lon);
-    if (cityTry.ok && cityTry.mode === "pollen") {
-      nearby = cityTry;
-      finalLabel = `${city.name} (nearest pollen zone)`;
-    } else if (!nearby.ok && cityTry.ok) {
-      nearby = cityTry;
-      finalLabel = city.name;
+  // Only do city fallback if needed (faster normal loads).
+  if (!nearby.ok || nearby.mode !== "pollen") {
+    const city = await resolveNearestCity(lat, lon);
+    if (city) {
+      const cityTry = await tryNearbyPoints(city.lat, city.lon);
+      if (cityTry.ok && cityTry.mode === "pollen") {
+        nearby = cityTry;
+        finalLabel = `${city.name} (nearest pollen zone)`;
+      } else if (!nearby.ok && cityTry.ok) {
+        nearby = cityTry;
+        finalLabel = city.name;
+      }
     }
   }
 
@@ -458,8 +455,11 @@ async function searchCity() {
   await fetchPollen(place.latitude, place.longitude, label);
 }
 
-locateBtn.addEventListener("click", async () => {
-  if (!navigator.geolocation) return setStatus("Geolocation is not supported in this browser.");
+async function loadFromCurrentLocation() {
+  if (!navigator.geolocation) {
+    setStatus("Geolocation is not supported in this browser.");
+    return;
+  }
 
   setStatus("Getting your location…");
   navigator.geolocation.getCurrentPosition(
@@ -471,9 +471,13 @@ locateBtn.addEventListener("click", async () => {
         setStatus(err.message || "Failed to fetch allergy data.");
       }
     },
-    () => setStatus("Location permission denied. Try city search instead."),
-    { enableHighAccuracy: true, timeout: 10000 }
+    () => setStatus("Location permission denied. Use Search city."),
+    { enableHighAccuracy: false, timeout: 7000, maximumAge: 300000 }
   );
+}
+
+locateBtn.addEventListener("click", async () => {
+  loadFromCurrentLocation();
 });
 
 searchBtn.addEventListener("click", () => {
@@ -484,5 +488,6 @@ cityInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") searchCity().catch((err) => setStatus(err.message || "Failed to search city."));
 });
 
-setStatus("Tap 'Use my location' to get started.");
+setStatus("Loading your location…");
 renderSources();
+loadFromCurrentLocation();
