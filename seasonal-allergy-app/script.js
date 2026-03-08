@@ -78,58 +78,109 @@ function hasAnyNumericPollen(hourly) {
   );
 }
 
-async function fetchPollen(lat, lon, label = "your area") {
-  setStatus(`Fetching allergy data for ${label}…`);
+async function fetchByPoint(lat, lon) {
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    timezone: "auto",
+    forecast_days: "7",
+    domains: "auto",
+    cell_selection: "nearest",
+    hourly: POLLEN_KEYS.map((p) => p.key).join(","),
+  });
 
+  const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
+  const res = await fetch(url);
+  const payload = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    return { ok: false, reason: payload.reason || "Could not load pollen data." };
+  }
+  if (!payload?.hourly?.time?.length) {
+    return { ok: false, reason: "No hourly pollen model data returned." };
+  }
+  if (!hasAnyNumericPollen(payload.hourly)) {
+    return { ok: false, reason: "Pollen model data missing for this area right now." };
+  }
+
+  return { ok: true, payload };
+}
+
+async function tryNearbyPoints(lat, lon) {
   const points = [
     [lat, lon],
     [lat + 0.2, lon],
     [lat - 0.2, lon],
     [lat, lon + 0.2],
     [lat, lon - 0.2],
+    [lat + 0.5, lon],
+    [lat - 0.5, lon],
+    [lat, lon + 0.5],
+    [lat, lon - 0.5],
   ];
 
-  let lastError = "Could not load pollen data.";
-
+  let lastReason = "Could not load pollen data.";
   for (const [plat, plon] of points) {
-    const params = new URLSearchParams({
-      latitude: String(plat),
-      longitude: String(plon),
-      timezone: "auto",
-      forecast_days: "7",
-      domains: "auto",
-      cell_selection: "nearest",
-      hourly: POLLEN_KEYS.map((p) => p.key).join(","),
-    });
-
-    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
-
     try {
-      const res = await fetch(url);
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        lastError = payload.reason || lastError;
-        continue;
-      }
-
-      if (!payload?.hourly?.time?.length) {
-        lastError = "No hourly pollen model data returned.";
-        continue;
-      }
-
-      if (!hasAnyNumericPollen(payload.hourly)) {
-        lastError = "Pollen model data missing for this area right now.";
-        continue;
-      }
-
-      render(payload, label, { lat: plat, lon: plon });
-      return;
+      const result = await fetchByPoint(plat, plon);
+      if (result.ok) return { ...result, point: { lat: plat, lon: plon } };
+      lastReason = result.reason || lastReason;
     } catch {
-      lastError = "Network error while loading pollen data.";
+      lastReason = "Network error while loading pollen data.";
     }
   }
 
-  throw new Error(lastError);
+  return { ok: false, reason: lastReason };
+}
+
+async function resolveNearestCity(lat, lon) {
+  try {
+    const reverseUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(
+      lat
+    )}&longitude=${encodeURIComponent(lon)}&localityLanguage=en`;
+    const reverseRes = await fetch(reverseUrl);
+    const reverseData = await reverseRes.json();
+    const cityName = reverseData.city || reverseData.locality;
+    if (!cityName) return null;
+
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+      cityName
+    )}&count=1&language=en&format=json`;
+    const geoRes = await fetch(geoUrl);
+    const geoData = await geoRes.json();
+    const place = geoData.results?.[0];
+    if (!place) return null;
+
+    return {
+      name: [place.name, place.country].filter(Boolean).join(", "),
+      lat: place.latitude,
+      lon: place.longitude,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPollen(lat, lon, label = "your area") {
+  setStatus(`Fetching allergy data for ${label}…`);
+
+  const nearby = await tryNearbyPoints(lat, lon);
+  if (nearby.ok) {
+    render(nearby.payload, label, nearby.point);
+    return;
+  }
+
+  const city = await resolveNearestCity(lat, lon);
+  if (city) {
+    const cityTry = await tryNearbyPoints(city.lat, city.lon);
+    if (cityTry.ok) {
+      setStatus(`Using nearest supported model area: ${city.name}.`);
+      render(cityTry.payload, city.name, cityTry.point);
+      return;
+    }
+  }
+
+  throw new Error(nearby.reason || "Could not load pollen data.");
 }
 
 async function renderLocationBrief(label, usedLat, usedLon, meta = {}) {
