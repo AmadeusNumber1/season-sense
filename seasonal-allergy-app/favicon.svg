@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#0f172a"/>
-  <circle cx="32" cy="32" r="7" fill="#facc15"/>
-  <ellipse cx="32" cy="16" rx="6" ry="9" fill="#22c55e"/>
-  <ellipse cx="32" cy="48" rx="6" ry="9" fill="#22c55e"/>
-  <ellipse cx="16" cy="32" rx="9" ry="6" fill="#22c55e"/>
-  <ellipse cx="48" cy="32" rx="9" ry="6" fill="#22c55e"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0F172A"/>
+  <g fill="#22C55E">
+    <ellipse cx="32" cy="15" rx="5.5" ry="8"/>
+    <ellipse cx="32" cy="49" rx="5.5" ry="8"/>
+    <ellipse cx="15" cy="32" rx="8" ry="5.5"/>
+    <ellipse cx="49" cy="32" rx="8" ry="5.5"/>
+    <ellipse cx="20.2" cy="20.2" rx="6.3" ry="4.6" transform="rotate(-45 20.2 20.2)"/>
+    <ellipse cx="43.8" cy="43.8" rx="6.3" ry="4.6" transform="rotate(-45 43.8 43.8)"/>
+    <ellipse cx="43.8" cy="20.2" rx="6.3" ry="4.6" transform="rotate(45 43.8 20.2)"/>
+    <ellipse cx="20.2" cy="43.8" rx="6.3" ry="4.6" transform="rotate(45 20.2 43.8)"/>
+  </g>
+  <circle cx="32" cy="32" r="7" fill="#FACC15"/>
 </svg>
