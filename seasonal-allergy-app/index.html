@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SeasonSense</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="header">
+        <h1>SeasonSense</h1>
+        <p>Live seasonal allergy levels for where you are.</p>
+      </header>
+
+      <section class="controls glass">
+        <button id="locateBtn" class="btn-primary">Use my location</button>
+        <div class="search-group">
+          <input id="cityInput" type="text" placeholder="or search city (e.g. Tel Aviv)" />
+          <button id="searchBtn" class="btn-ghost">Search</button>
+        </div>
+      </section>
+
+      <section id="status" class="status"></section>
+
+      <section id="summary" class="summary-grid"></section>
+
+      <section class="glass forecast-wrap">
+        <h2>7-day outlook</h2>
+        <div id="forecast" class="forecast-grid"></div>
+      </section>
+    </main>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>
