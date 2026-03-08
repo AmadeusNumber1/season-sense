@@ -238,30 +238,6 @@ async function fetchWeatherDaily(lat, lon) {
   return payload;
 }
 
-function roughDistanceKm(aLat, aLon, bLat, bLon) {
-  const dx = (aLon - bLon) * 111 * Math.cos(((aLat + bLat) / 2) * (Math.PI / 180));
-  const dy = (aLat - bLat) * 111;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-async function forceNearestPollenZone(lat, lon) {
-  const anchors = [
-    { name: "Tel Aviv, Israel", lat: 32.0853, lon: 34.7818 },
-    { name: "Athens, Greece", lat: 37.9838, lon: 23.7275 },
-    { name: "Rome, Italy", lat: 41.9028, lon: 12.4964 },
-    { name: "Madrid, Spain", lat: 40.4168, lon: -3.7038 },
-    { name: "Paris, France", lat: 48.8566, lon: 2.3522 },
-    { name: "Berlin, Germany", lat: 52.52, lon: 13.405 },
-  ].sort((a, b) => roughDistanceKm(lat, lon, a.lat, a.lon) - roughDistanceKm(lat, lon, b.lat, b.lon));
-
-  for (const a of anchors) {
-    const r = await tryNearbyPoints(a.lat, a.lon);
-    if (r.ok && r.mode === "pollen") return { ...r, label: `${a.name} (nearest pollen zone)` };
-  }
-
-  return null;
-}
-
 async function fetchPollen(lat, lon, label = "your area") {
   setStatus(`Fetching allergy data for ${label}…`);
 
@@ -284,13 +260,6 @@ async function fetchPollen(lat, lon, label = "your area") {
 
   if (nearby.ok && nearby.mode === "pollen") {
     renderPollen(nearby.payload, finalLabel, nearby.point);
-    return;
-  }
-
-  const forced = await forceNearestPollenZone(lat, lon);
-  if (forced) {
-    renderPollen(forced.payload, forced.label, forced.point);
-    setStatus(`Using nearest available pollen zone for ${label}.`);
     return;
   }
 
@@ -452,9 +421,9 @@ function renderProxy(air, weather, label, usedPoint) {
     .join("");
 
   renderAdvice(Math.max(...cards.map((c) => c.value)), true);
-  renderModeBadge("🌍 Global Proxy Mode");
+  renderModeBadge("🌍 Local Proxy Mode");
   renderAirExplain(
-    `No direct pollen model here, so risk is estimated from Dust (PM10), UV, and Wind. Higher values can worsen allergy symptoms, especially for sensitive users.`
+    `No direct pollen model is available for this location, so risk is estimated from local Dust (PM10), UV, and Wind. Higher values can worsen allergy symptoms, especially for sensitive users.`
   );
   const t = rows[0] || {};
   renderDrivers(
@@ -465,8 +434,8 @@ function renderProxy(air, weather, label, usedPoint) {
   );
   renderColdVsAllergy(buildColdVsAllergyText());
   renderLocationBrief(label, usedPoint.lat, usedPoint.lon, { timezone: air.timezone, elevation: air.elevation });
-  setStatus(`Showing environmental allergy risk for ${label}.`);
-  renderSources("Proxy mode: PM10 + UV + wind used where pollen model is unavailable.");
+  setStatus(`No local pollen model coverage for ${label} right now. Showing local environmental allergy risk.`);
+  renderSources("Local proxy mode: PM10 + UV + wind at your location are used when pollen model coverage is missing.");
 }
 
 async function searchCity() {
